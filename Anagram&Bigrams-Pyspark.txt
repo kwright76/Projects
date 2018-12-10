@@ -1,0 +1,67 @@
+#Assignment 3 - Kyle Wright
+
+from __future__ import print_function
+import sys
+from pyspark.sql import SparkSession
+
+if __name__ == '__main__':
+
+	if len(sys.argv) != 2:
+		print("Usage: assignment-3.py <file>", file==sys.stderr)
+		exit(-1)
+
+	spark = SparkSession.builder.appName("assignment-3").getOrCreate()
+	print('spark=', spark)
+
+	input_path = sys.argv[1]
+	print('input path:', input_path)
+
+	rdd = spark.sparkContext.textFile(input_path)
+	print('rdd', rdd.count())
+	rdd1 = rdd.map(lambda x: x.lower())
+	rdd2 = rdd1.filter(lambda x: len(x) > 0)
+
+	charsrdd = ['-', '_', ',', '.', '?', ';', '/', '%', '!', '#', '^', '@', '&', '\'', '(', ')', '[', ']', ':', '{', '}']
+	#Unique/Clean Function
+	def clean(rec):
+		x = rec.lower()
+		token = x.split()
+		for i in range(len(token)):
+			if len(token[i]) > 0 and token[i][-1] in charsrdd:
+				token[i] = token[i][:-1]
+			elif len(token[i]) > 0 and token[i][0] in charsrdd:
+				token[i] = token[i][1:]
+			else:
+				token[i] = token[i]
+		#token = " ".join(token)
+		#token = token.strip()
+		return token
+	#Fct to take out words of four chars
+	def four_words(rec):
+		token = rec.split()
+		list = []
+		for i in token:
+			if len(i) < 4:
+				pass
+			else:
+				list.append(i)
+		return list
+	#cleaned rdd
+	#filter = rdd2.filter(lambda x: len(x) == 0)
+	cleaned = rdd2.flatMap(clean)
+	no4words = cleaned.flatMap(four_words)
+	#get rdd with top 5 unique values
+	unique = no4words.map(lambda x: (x,1)).reduceByKey(lambda x, y: x  + y)
+	unique5 = unique.top(5, key = lambda x: x[1])
+	
+	#get rdd with top 5 anagrams
+	anagram = no4words.map(lambda word: ("".join(sorted([letter for letter in word])), 1)).reduceByKey(lambda x, y: x + y).top(5, key = lambda x: x[1])
+	
+	#get rdd with top 5 bigrams
+	bigram = rdd2.map(lambda x: x.split()).flatMap(lambda x: [((x[i], x[i + 1]), 1) for i in range (0, len(x) -1)]).reduceByKey(lambda x, y: x + y).top(5, key = lambda x: x[1])
+	#.map(lambda x: x.split(" "))
+	print ("Unique: ", unique5)
+	print ("Anagrams: ", anagram)
+	print ("Bigrams: ", bigram)
+	
+	spark.stop()
